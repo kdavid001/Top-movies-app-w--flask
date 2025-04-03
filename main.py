@@ -91,7 +91,6 @@ def add():
             # review=form.review.data,
             # img_url=form.img_url.data
         )
-        response = requests.get(url)
         db.session.add(new_movie)
         db.session.commit()
         return redirect(url_for('home'))  # Redirect to home page after adding
@@ -103,14 +102,23 @@ def add_movie():
     form = FindMovieForm()
     if form.validate_on_submit():
         movie_name = form.title.data
-
-        return redirect(url_for('select'), movie=movie_name)
+        return redirect(url_for('select', movie=movie_name))  # Pass parameter correctly
     return render_template("add.html", form=form)
 
 @app.route("/select", methods=["GET", "POST"])
 def select():
+    movie_name = request.args.get("movie")  # Retrieve the movie name from the URL
 
-    return render_template("select.html")
+    if not movie_name:
+        return "Error: No movie name provided", 400  # Handle missing parameter
+
+    query_param = {
+        "query": f"{movie_name}"
+    }
+
+    response = requests.get(url, headers=headers, params=query_param).json()
+
+    return render_template("select.html", movie=response)
 
 @app.route("/update/<int:movie_id>", methods=["GET", "POST"])
 def update(movie_id):

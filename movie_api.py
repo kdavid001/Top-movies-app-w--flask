@@ -11,10 +11,12 @@ query_param = {
     "query" : "interstella"
 }
 
-title = ''
-
+response = requests.get(url = url, headers = headers, params = query_param).json()
+movie_list = []
 for key, value in response.items():
     print(f"{key}: {value}")
     if "results" in response:
         for movie in response["results"]:
-            print(f"Title: {movie.get(f"title", 'N/A')}, Release Date: {movie.get('release_date', 'N/A')}")
+            movie_list.append(f"{movie.get(f"title", 'N/A')}, Release Date: {movie.get('release_date.year', 'N/A')}")
+
+print(movie_list)
