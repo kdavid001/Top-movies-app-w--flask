@@ -1,49 +1,42 @@
 import sqlite3
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 from flask import Flask, render_template, redirect, url_for, request
 from flask_sqlalchemy import SQLAlchemy
-from flask_bootstrap5 import Bootstrap  # ✅ Correct import
+from flask_bootstrap5 import Bootstrap
 from flask_wtf import FlaskForm
 from wtforms import StringField, SubmitField, SelectField, FloatField
 from wtforms.fields.numeric import IntegerField
 from wtforms.validators import DataRequired
+from flask_wtf.csrf import CSRFProtect
 from markupsafe import Markup
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import Integer, String, Float
 from db import session, Movies
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = '5fc183cacb94d476269aad5d0133b9f95664f2f5ec197870388679e5c76ab539'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///movies.db'
-Bootstrap(app)  # ✅ Correct way to initialize Bootstrap
-# Create database instance
+Bootstrap(app)
+
+# database instance
 db = SQLAlchemy()
 db.init_app(app)
-
+csrf = CSRFProtect(app)
+load_dotenv()
 year_choices = [(str(y), str(y)) for y in range(1900, datetime.now().year + 1)]
 
 # -------- For the Movie API ---------- #
 import requests
-url ="https://api.themoviedb.org/3/search/movie"
-API_KEY = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIwMWJhZGIxN2NmNjFkY2Q2MzhkYjZkYWEzNjQ3ODkxYiIsIm5iZiI6MTc0MzQyNzM5NC41OTYsInN1YiI6IjY3ZWE5NzQyNTA0MGE3NWI0YWU1N2QwMCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.IISVbxUhTOnUZOQdzb6RqTiyUDUH-59IKVovs62TgYU"
+
+url = "https://api.themoviedb.org/3/search/movie"
+Image_api_url = "https://image.tmdb.org/t/p/w500"
+
 headers = {
     "accept": "application/json",
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiIwMWJhZGIxN2NmNjFkY2Q2MzhkYjZkYWEzNjQ3ODkxYiIsIm5iZiI6MTc0MzQyNzM5NC41OTYsInN1YiI6IjY3ZWE5NzQyNTA0MGE3NWI0YWU1N2QwMCIsInNjb3BlcyI6WyJhcGlfcmVhZCJdLCJ2ZXJzaW9uIjoxfQ.IISVbxUhTOnUZOQdzb6RqTiyUDUH-59IKVovs62TgYU"
+    "Authorization": f"Bearer {os.getenv('API_KEY')}",
 }
-
-
-
-
-
-# class Movies(db.Model):
-#     id = db.Column(db.Integer, primary_key=True)
-#     title = db.Column(db.String(250), nullable=False)
-#     year = db.Column(db.Integer, nullable=False)
-#     description = db.Column(db.String(500), nullable=False)
-#     rating = db.Column(db.Float, nullable=False)
-#     ranking = db.Column(db.Integer, nullable=False)
-#     review = db.Column(db.String(500), nullable=False)
-#     img_url = db.Column(db.String(500), nullable=False)
-
 
 # Create table if not exists
 with app.app_context():
@@ -62,10 +55,10 @@ class MovieForms(FlaskForm):
     submit = SubmitField('Submit')
 
 
-# class RateMovieForm(FlaskForm):
-#     rating = StringField("Your Rating Out of 10 e.g. 7.5")
-#     review = StringField("Your Review")
-#     submit = SubmitField("Done")
+class RateMovieForm(FlaskForm):
+    rating = StringField("Your Rating Out of 10 e.g. 7.5")
+    review = StringField("Your Review")
+
 
 class FindMovieForm(FlaskForm):
     title = StringField("Movie Title", validators=[DataRequired()])
@@ -74,64 +67,40 @@ class FindMovieForm(FlaskForm):
 
 @app.route("/")
 def home():
-    movies = session.query(Movies).all()
-    return render_template("index.html", movies=movies)
+    result = db.session.execute(db.select(Movies).order_by(Movies.rating))
+    all_movies = result.scalars().all()  # convert ScalarResult to Python List
 
+    for i in range(len(all_movies)):
+        all_movies[i].ranking = len(all_movies) - i
+    db.session.commit()
 
+    return render_template("index.html", movies=all_movies)
 @app.route("/add", methods=["GET", "POST"])
 def add():
-    form = MovieForms()
-    if form.validate_on_submit():
-        new_movie = Movies(
-            title=form.title.data,
-            # year=form.year.data,
-            # description=form.description.data,
-            # rating=form.rating.data,
-            # ranking=form.ranking.data,
-            # review=form.review.data,
-            # img_url=form.img_url.data
-        )
-        db.session.add(new_movie)
-        db.session.commit()
-        return redirect(url_for('home'))  # Redirect to home page after adding
-    return render_template('add.html', form=form)
-
-
-@app.route("/add", methods=["GET", "POST"])
-def add_movie():
     form = FindMovieForm()
     if form.validate_on_submit():
-        movie_name = form.title.data
-        return redirect(url_for('select', movie=movie_name))  # Pass parameter correctly
+        movie_title = form.title.data
+        query_param = {
+            "query": f"{movie_title}"
+        }
+        response = requests.get(url, headers=headers, params=query_param).json()
+        data = response["results"]
+        return render_template("select.html", options=data)
     return render_template("add.html", form=form)
 
-@app.route("/select", methods=["GET", "POST"])
-def select():
-    movie_name = request.args.get("movie")  # Retrieve the movie name from the URL
-
-    if not movie_name:
-        return "Error: No movie name provided", 400  # Handle missing parameter
-
-    query_param = {
-        "query": f"{movie_name}"
-    }
-
-    response = requests.get(url, headers=headers, params=query_param).json()
-
-    return render_template("select.html", movie=response)
 
 @app.route("/update/<int:movie_id>", methods=["GET", "POST"])
 def update(movie_id):
-    movie = session.query(Movies).filter_by(id=movie_id).first()
+    movie = db.session.query(Movies).get_or_404(movie_id)
     if not movie:
         return "Movie not found", 404
 
-    form = MovieForms(obj=movie)
+    form = RateMovieForm(obj=movie)
 
     if form.validate_on_submit():
         movie.rating = form.rating.data
         movie.review = form.review.data
-        session.commit()
+        db.session.commit()
         return redirect(url_for("home"))
 
     return render_template("edit.html", form=form, movie=movie)
@@ -139,12 +108,52 @@ def update(movie_id):
 
 @app.route("/delete/<int:movie_id>", methods=["GET", "POST"])
 def delete(movie_id):
-    movie_to_delete = session.query(Movies).filter_by(id=movie_id).first()
-    if movie_to_delete:
-        session.delete(movie_to_delete)
-        session.commit()
+    # Retrieve the movie object using the passed movie_id
+    movie = db.session.query(Movies).get_or_404(movie_id)
+
+    # Delete the movie object
+    db.session.delete(movie)
+    db.session.commit()
+
+    # Redirect to the home page after deletion
+    return redirect(url_for("home"))
+@app.route("/edit", methods=["GET", "POST"])
+def rate_movie():
+    form = RateMovieForm()
+    movie_id = request.args.get("id")
+    movie = db.get_or_404(Movies, movie_id)
+    if form.validate_on_submit():
+        movie.rating = float(form.rating.data)
+        movie.review = form.review.data
+        db.session.commit()
+        return redirect(url_for('home'))
+    return render_template("edit.html", movie=movie, form=form)
+
+
+@app.route("/find")
+def find_movie():
+    movie_id = request.args.get("id")
+    if movie_id:
+        movie_api_url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+        response = requests.get(movie_api_url, headers=headers, params={
+            "api_key": os.getenv("API_KEY"), "language": "en-US"})
+        print(response)
+        data = response.json()
+        new_movie = Movies(
+            title=data["title"],
+            year=data["release_date"].split("-")[0],
+            img_url=f"{Image_api_url}{data['poster_path']}",
+            description=data["overview"],
+            rating=0,
+            ranking = 0,
+            review= "None",
+
+        )
+        db.session.add(new_movie)
+        db.session.commit()
+        return redirect(url_for("rate_movie", id=new_movie.id))
+    else:
         return redirect(url_for("home"))
-    return "Movie not found", 404
 
 
 if __name__ == '__main__':
