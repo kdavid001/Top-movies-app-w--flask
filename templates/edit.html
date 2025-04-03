@@ -1,26 +1,28 @@
 {% extends 'base.html' %}
 
-{% block title %}Edit Movie{% endblock %}
+{% block title %}Edit Movies{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h1 class="heading">{{ movie.title }}</h1>
-    <p class="description">Edit Movie Details</p>
-    
-    <!-- Displaying the form -->
-    <form method="POST">
-        {{ form.hidden_tag() }}
-        <div class="mb-3">
-            {{ form.rating.label(class="form-label") }}
-            {{ form.rating(class="form-control") }}
-        </div>
+<div class="content">
+  <h1 class="heading">{{ movie.title }}</h1>
+  <p class="description">Edit Movie Rating</p>
 
-        <div class="mb-3">
-            {{ form.review.label(class="form-label") }}
-            {{ form.review(class="form-control") }}
-        </div>
-        <button type="submit" class="btn btn-primary">Update Movie</button>
-        <a href="{{ url_for('home') }}" class="btn btn-secondary">Cancel</a>
-    </form>
+  <form method="POST">
+    {{ form.hidden_tag() }}
+    {% for field in form %}
+      <div class="form-group">
+        <label for="{{ field.id }}">{{ field.label }}</label>
+        {{ field(class="form-control") }}
+        {% if field.errors %}
+          <div class="errors">
+            {% for error in field.errors %}
+              <p class="error">{{ error }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">Submit</button>
+  </form>
 </div>
 {% endblock %}

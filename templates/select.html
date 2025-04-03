@@ -5,11 +5,11 @@
 {% block content %}
 <div class="container">
     <h1 class="heading">Select Movie</h1>
-    {%for movie_list in movie%}
+    {% for movie in options: %}
   <p>
-     {loop.index}{movie.title}
-    <a href="#"> MOVIE TITLE - MOVIE RELEASE DATE</a>
+    <a href="{{ url_for('find_movie', id=movie.id) }} ">{{ movie.title }} - {{movie.release_date}}</a>
   </p>
-{% endfor %}
+  {% endfor %}
+
 </div>
 {% endblock %}
